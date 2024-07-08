@@ -7,7 +7,7 @@ const decompress = require("decompress");
 
 async function main() {
 
-    console.log("2.2 maker for iOS - https://dimisaio.be\n");
+    console.log("2.2 maker for Android - Original for iOS https://dimisaio.be\n");
 
     if (!fs.existsSync("base.ipa")) {
         await dl("https://us-east-1.tixte.net/uploads/files.141412.xyz/base.ipa", 'base.ipa');
@@ -18,10 +18,10 @@ async function main() {
 
     var dir = `${name.toLowerCase()}-${crypto.randomBytes(8).toString('hex')}`;
 
-    var bundle = prompt("Enter bundle id (23 chars): ");
+    var bundle = prompt("Enter bundle id (24 chars): ");
 
     while (bundle.length != 23) {
-        console.log("Length isn't 23!!!\n");
+        console.log("Length isn't 24!!!\n");
         var bundle = prompt("Bundle id: ");
     }
 
