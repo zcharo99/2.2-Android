@@ -6,11 +6,11 @@ var crypto = require("crypto");
 const { parseApkXml } = require("apk-xml-parser");
 const { xml2axml } = require("xml2axml");
 const admzip = require('adm-zip');
-const { sign } = require("node-apk-signer");
+const signer = require("node-apk-signer");
 
 async function main() {
 
-    console.log("2.2 maker for Android - Original for iOS https://dimisaio.be\n");
+    console.log("2.2 maker for Android - Original for iOS at https://dimisaio.be\n");
 
     if (!fs.existsSync("base.apk")) {
         await dl("https://us-east-1.tixte.net/uploads/zchar.discowd.com/base.apk", 'base.apk');
@@ -37,37 +37,104 @@ async function main() {
     var b64 = Buffer.from(base).toString('base64');
     var url = `${base}/`;
 
+    var keystorePath = prompt("Full path to keystore file for signing: ");
+    var keyAlias = prompt("Key alias: ");
+    var keyPassword = prompt("Key password: ");
+    var keystorePassword = prompt("Keystore password: ")
+
     console.log("Changing links")
     var gd = await fs.promises.readFile(`base.apk`, 'binary');
     gd = gd.replaceAll("https://www.boomlings.com/database", url).replaceAll("aHR0cDovL3d3dy5ib29tbGluZ3MuY29tL2RhdGFiYXNl", b64);
     await fs.promises.writeFile(`base.apk`, gd, 'binary');
-    
+
     console.log("Decompressing base.apk\n");
 
     const zip = new AdmZip("base.apk");
-    const dir = "./baseapkunzipped";
-    if (!fs.existsSync(dir)) {
-        fs.mkdirSync(dir, { recursive: true });
-    }
-    zip.extractAllTo(dir, true);
-    const manifestPath = dir + "/AndroidManifest.xml"
+    let zipEntries = await zip.getEntries();
 
-    console.log("APK decompressed")
-    console.log("Converting APK manifest from binary to readable at " + manifestPath + "\n")
+    let manifestEntry = null;
+    zipEntries.forEach((entry) => {
+        if (entry.entryName === "AndroidManifest.xml") {
+            manifestEntry = entry;
+        }
+    });
+    if (!manifestEntry) {
+        console.error("AndroidManifest.xml not found");
+        process.exit(1);
+    }
     
-    // change bundle id
+    var directory = "./baseapkunzipped";
+    if (!fs.existsSync(directory)) {
+        await fs.mkdirSync(directory, { recursive: true });
+    }
+    zip.extractAllTo(directory, true);
+    const manifestPath = directory + "/AndroidManifest.xml"
+
+    console.log("APK decompressed\n")
     
-    var gd = await fs.promises.readFile(`${path}/${name}`, 'binary');
-    gd = gd.replaceAll("com.robtop.geometryjump", bundle).replaceAll("https://www.boomlings.com/database", url).replaceAll("aHR0cDovL3d3dy5ib29tbGluZ3MuY29tL2RhdGFiYXNl", b64);
-    await fs.promises.writeFile(`${path}/${name}`, gd, 'binary');
+    console.log("Converting APK manifest to readable at " + manifestPath + "\n")
+
+    await fs.readFile(manifestPath, (err, data) => {
+        if (err) throw err;
+
+        parseApkXml(data)
+            .then((plainXml) => {
+                const modifiedXml = plainXml.replace(/package="[^"]+"/, `package="${bundle}"`);
+                const apkXml = xml2axml(modifiedXml);
+
+                await fs.writeFile(binaryXmlPath, binaryXml, (err) => {
+                    if (err) throw err;
+                    console.log("Manifest successfully modified\n");
+                });
+            })
+            .catch((error) => {
+                console.error('Error parsing XML: ', error);
+            });
+    });
+    
+    
     
     console.log("Compressing...\n")
 
-    await zipFolder(dir, `${name}.ipa`);
+    async function zipFolder(folderPath, zipPath) {
+        await fs.readdirSync(folderPath.forEach(file => {
+            const filePath = await path.join(folderPath, file);
+            if (fs.statSync(filePath).isFile()) {
+                await zip.addLocalFile(filePath);
+            }
+        });
+        await zip.writeZip(zipPath);
+        console.log("Compressed!\n");
+    }
     
-    await fs.promises.rm(dir, { recursive: true, force: true });
+    await zipFolder(directory, `${name}-Unsigned.apk`);
+    console.log("Signing...\n")
 
-    console.log("Done! Project by DimisAIO.be :)")
+    const newsigner = new signer({
+        keyStore: keystorePath,
+        keyStorePassword: keystorePassword,
+        keyAlias: keyAlias,
+        keyPassword: keyPassword
+    });
+    signer.sign(`${name}-Unsigned`, `${name}`).then(() => {
+        console.log("APK signed successfully");
+    }).catch((error) => {
+        console.error('Error signing APK: ', error);
+        process.exit(1);
+    });
+    
+    await fs.promises.rm(directory, { recursive: true, force: true });
+
+    var saveUnsigned = prompt("Save unsigned APK? [y/N]: ");
+    if (saveUnsigned == "y") {
+        console.log("Saving unsigned APK\n");
+    } else {
+        console.log("Removing unsigned APK...\n");
+        await fs.promises.rm(`${name}-Unsigned.apk`, { force: true });
+        console.log("Removed unsigned APK\n")
+    }
+    
+    console.log("Done!")
 }
 
 main(); // ok
