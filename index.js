@@ -1,11 +1,12 @@
 var prompt = require('prompt-sync')();
 const dl = require('./dl.js');
-const zipFolder = require('./zipper');
 const fs = require("fs");
-
+const pathr = require("path");
 var crypto = require("crypto");
-
-const decompress = require("decompress");
+const { parseApkXml } = require("apk-xml-parser");
+const { xml2axml } = require("xml2axml");
+const admzip = require('adm-zip');
+const { sign } = require("node-apk-signer");
 
 async function main() {
 
@@ -36,11 +37,23 @@ async function main() {
     var b64 = Buffer.from(base).toString('base64');
     var url = `${base}/`;
 
+    console.log("Changing links")
+    var gd = await fs.promises.readFile(`base.apk`, 'binary');
+    gd = gd.replaceAll("https://www.boomlings.com/database", url).replaceAll("aHR0cDovL3d3dy5ib29tbGluZ3MuY29tL2RhdGFiYXNl", b64);
+    await fs.promises.writeFile(`base.apk`, gd, 'binary');
+    
     console.log("Decompressing base.apk\n");
 
-    await decompress("base.apk", dir);
+    const zip = new AdmZip("base.apk");
+    const dir = "./baseapkunzipped";
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+    zip.extractAllTo(dir, true);
+    const manifestPath = dir + "/AndroidManifest.xml"
 
-    console.log("Editing APK at " + dir + "\n")
+    console.log("APK decompressed")
+    console.log("Converting APK manifest from binary to readable at " + manifestPath + "\n")
     
     // change bundle id
     
